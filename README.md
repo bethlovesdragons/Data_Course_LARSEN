@@ -7,3 +7,5 @@ please just work this time
 Oh yay, it's finally working
 wheeeeeee
 well, here's another change
+copied the folders, but can't figure out to add and commit them yet
+pls
