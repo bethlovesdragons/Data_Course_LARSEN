@@ -1,0 +1,14 @@
+1. I'm not an expert, but these all seem pretty meaningless since I just plugged random numbers into it. It doesn't really seem to change much, but that might be because my hypothetical value is apparently too big. Idk.
+
+2. I'm pretty sure I got non-linear at some point, but I don't remember how I did that. Here's a link I found https://www.datacamp.com/tutorial/introduction-to-non-linear-model-and-insights-using-r I don't think I understood any of it really.
+
+3. This is what chat helped me make since I didn't understand the reading.
+nonlin<-read.csv("../../Data/non_linear_relationship.csv")
+
+mod_poly <- lm(response ~ poly(predictor, 2), data = nonlin)
+ggplot(nonlin, aes(x = predictor, y = response)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ poly(x, 2), color = "blue") +
+  theme_minimal()
+
+It just makes a line. Not sure if that's what it's supposed to do though.
