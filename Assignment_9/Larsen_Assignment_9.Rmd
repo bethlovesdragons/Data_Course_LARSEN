@@ -1,0 +1,112 @@
+---
+output: 
+html_document:
+  number_sections=TRUE
+pagetitle: Larsen_Assignment_9
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# **Assignment 9**
+
++ Use the data set "/Data/GradSchool_Admissions.csv"
++ You will explore and model the predictors of graduate school admission
+  - the "admit" column is coded as 1=success and 0=failure (that's binary, so model appropriately)
+  - the other columns are the GRE score, the GPA, and the rank of the undergraduate institution, where I is "top-tier."
++ Document your data explorations, figures, and conclusions in a reproducible R-markdown report
++ That means I want to see, in your html report, your process of model evaluation and selection. Here's an [example](https://gzahn.github.io/data-course/Repository/Assignments/Assignment_9/example.html){target="_blank"}
++ Upload your **self-contained** R project, including knitted HTML report, to GitHub in *your* Assignment_9 directory
+
+##Alright, let's get started.
+
+```{r}
+##Any variables I'm using.
+#gradad - gradschool admissions csvs
+#modgrad - the model for the gradschool acceptance. 
+#modsmol - the second model for this, smaller
+
+#libraries loading
+library(tidyverse)
+library(ggplot2)
+library(modelr)
+library(dplyr)
+library(hexbin)  
+
+#Loading in the data.
+gradad <- read.csv("../../Data/GradSchool_Admissions.csv")
+
+#Taking a looksie
+glimpse(gradad)
+str(gradad)
+
+```
+First we need to clean the data set.
+```{r}
+#Changing rank to a factor instead of whatever it is now. 
+gradad$rank <- as.factor(gradad$rank)
+#colSums(is.na(gradad))
+```
+Epic, very cool. Now let's go ahead and mess around with the data.
+```{r}
+#Going off vibes man.
+#Let's mess with gre
+ggplot(gradad, aes(x = gre)) + geom_histogram(bins = 30, fill = "#654986")
+#Gonna be real. No idea what a gre score is, so no idea how to interprit this. I may be stupid.
+
+#Now let's mess with gpa
+ggplot(gradad, aes(x = gpa)) + geom_histogram(bins = 30, fill = "lightgreen")
+#Am I dumb, or is that the exact same shape and distribution? 
+
+#I guess it is almost. Well, that was just sort of exploring what the data looked like. Now let's mess with other stuff.
+
+#looking by rank at admission.
+ggplot(gradad, aes(x = rank, fill = as.factor(admit))) + geom_bar(position = "fill") + labs(title = "Admission Rate by Rank", fill = "Admit")
+#I again, don't really know what's going on with this graph. Looks neat.
+
+#Now let's compare two variables rather than just looking at one at a time.
+#Or, I guess we did that with the last one. But I didn't fully know what that meant.
+ggplot(gradad, aes(x = gre, y = gpa, color = as.factor(admit))) + geom_point()
+#This one to me indicates that higher gpa and higher gre makes it more likely to be admitted. It seems to me though that the gre matters more than the gpa, as I see more 1 dots clustered around the right side of the x axis. 
+
+```
+Alright, let's make the model itself now.
+```{r}
+#With the help of ChatGPT, shoutout.
+modgrad <- glm(admit ~ gre + gpa + rank, data = gradad, family = binomial)
+summary(modgrad)
+#Gonna be so real right now, the way this is is meaningless to me. I don't understand it. 
+#ChatGPT said this was the interpritation: GRE: Positive coefficient suggests higher GRE increases admission probability.
+#GPA: Typically strong positive predictor.
+#Rank: Lower-tier schools (higher rank number) usually reduce admission odds.
+#Maybe it is, I have no idea. I liked the graph better. And I think I got the idea from the graph
+
+#Let's make another model now to compare. 
+modsmol <- glm(admit ~ gpa + rank, 
+                     data = gradad, 
+                     family = binomial)
+summary(modsmol)
+#Again, no idea what this means.
+#But let's compare them anyway.
+anova(modsmol, modgrad, test = "Chisq") 
+AIC(modgrad, modsmol)
+
+```
+I guess let's evaluate things now
+```{r}
+#Again, using the help of ChatGPT.
+#Probabilities
+gradad$pred_prob <- predict(modgrad, type = "response")
+#Classification Threshhold? Idk what this one is
+gradad$pred_class <- ifelse(gradad$pred_prob > 0.5, 1, 0)
+table(Predicted = gradad$pred_class, Actual = gradad$admit)
+#accurary
+mean(gradad$pred_class == gradad$admit)
+
+```
+So, after having done this, I think that GPA IS in fact the number one contributing factor, but GRE seems to be fairly close behind. Both seem to have a positive correlation with admission.
+I think the bigger model (modgrad) performs better than the smaller one (modsmol)
+When I asked for help from ChatGPT, it said something about the institution's rank affecting it, which I did put in the model, but I don't really know how that one worked. 
+I think for having everything on my plate I did this past week this was pretty okay the way it turned out. I'll have to look into the rank though, cause I think I'm just not understanding. 
