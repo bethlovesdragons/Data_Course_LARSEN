@@ -1,0 +1,205 @@
+---
+title: "LARSEN_Skills_Test_3"
+output: html_document
+date: "2026-04-11"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+##Variables used:
+facsal - Faculty Salaries 1995
+fstidy - Tidied version of facsal
+fsmod - ANOVA model for facsal, specifically using fstidy
+amod - ANOVA model above, but with a different command.
+joil - Juniper Oils
+tidyjoil - tidied version of joil
+modjoil - model for joil
+
+
+##Task 1
+Load and clean FacultySalaries_1995.csv file and Re-create the graph
+```{r}
+#loading libraries
+library(janitor)
+library(ggplot2)
+library(dplyr)
+library(here)
+library(tidyverse)
+library(broom)
+
+
+#Loading in the data
+facsal<-read.csv("FacultySalaries_1995.csv")
+glimpse(facsal)
+
+#Cleaning the data now
+facsal <- read.csv(here("FacultySalaries_1995.csv")) |>
+  clean_names()
+#I'll be so real with you, I have no idea what this next line does, ChatGPT recommended to me.
+#I couldn't tell a difference in before/after it. I've commented it since Idk what it does.
+#facsal <- facsal |>
+  #mutate(univ_name = stringr::str_squish(univ_name))
+unique(facsal$state)
+#uh oh. There's only 50 states, why am I getting back 52 codes?
+#It's including DC, that's okay.
+#But what's WW. We can check using other data, from universitys
+facsal |> 
+  filter(state == "WW")
+#So, it's Shepard College. I looked that up. Well, it looks like it's a University now, but still.
+facsal <- facsal |>
+  mutate(state = dplyr::recode(state, "WW" = "WV"))
+unique(facsal$state)
+#Excellent, that's working now.
+#Other fixing. Again on Shepard's College, there was a weird error I noticed after tyring to graph and having t come back here again.
+facsal <- facsal |>
+  mutate(tier = recode(tier, "VIIB" = "IIB"))
+facsal <- facsal |>
+  mutate(tier = factor(tier, levels = c("I", "IIA", "IIB")))
+facsal <- facsal |>
+  mutate(state = factor(state))
+#Now making it tidy.
+fstidy <- facsal |>
+  pivot_longer(
+    cols = c(avg_assist_prof_salary,
+             avg_assoc_prof_salary,
+             avg_full_prof_salary),
+    names_to = "rank",
+    values_to = "salary"
+  )
+#And even tidier
+fstidy<- fstidy |>
+  mutate(
+    rank = recode(rank,
+      "avg_assist_prof_salary" = "Assist",
+      "avg_assoc_prof_salary"  = "Assoc",
+      "avg_full_prof_salary"   = "Full"
+    ),
+    rank = factor(rank, levels = c("Assist", "Assoc", "Full"))
+  )
+fstidy <- fstidy |>
+  filter(is.finite(salary))
+
+#Making the plot
+ggplot(fstidy, aes(x = rank, y = salary, fill = rank)) +
+  geom_boxplot() +
+  facet_wrap(~ tier, nrow = 1) +
+  scale_fill_manual(values = c(
+    "Assist" = "brown3",
+    "Assoc"  = "forestgreen",
+    "Full"   = "skyblue3"
+  )) +
+  theme_minimal()
+
+
+
+```
+##Task 2
+Build an ANOVA model and display the summary output in your report.
+```{r}
+#This is how I did it in my stats as well as the other homework assignments. I'll stick to this way here. 
+fsmod <- lm(salary ~ state + tier + rank, data = fstidy)
+#Viewing the ANOVA table.
+summary(fsmod)
+#yeah, okay, that's unreadable to me.
+amod<-aov(salary ~ state + tier + rank, data=fstidy)
+summary(amod)
+#Much better. Let's use that one.
+#Let's plot it for sanity sake now.
+plot(fsmod)
+#Oh gosh, that's a lot. I don't really know what I'm looking at, I'll be honest.
+plot(amod)
+#Oh boy, same plot. Still no idea.
+#But, using the numeric output, I'll interpret the conclusion.
+#It's a really really small f-stat for all three catagories, so I'll reject the null.
+```
+Using the second ANOVA model I made (amod), as it's much more readable than the first to me, I reject the null hypothesis in favor of the salary amount being correlated with all three of the variables tested. Rank and Tier are both positively correlated. The full professors earned more than their associate and assistant colleagues. Higher tiered schools also paid their employees more than the lower ranked ones. 
+State did appear to have a correlation as well, but there are very possibly confounding variables that influence this particular statistic. Certain areas are simply more populated, and therefore more well funded than others. State had a very low F-stat value too, but I'm not as certain on the actual correlation here. 
+
+##Task 3
+The rest of the test uses another data set. The “Juniper_Oils.csv” data. Get it loaded and take a look. Then tidy it! (show the code used for tidying in your report)
+```{r}
+#Let's load in this new data set.
+joil<-read.csv("Juniper_Oils.csv")
+glimpse(joil)
+#Oh boy, that's, that's awesome.
+#Wow. Love the 41 catagories.
+#Let's get that bad boy tidied up.
+names(joil)[11:33]
+#Okay, everything is in the order I want it. Thank you for making that all tidy already.
+chemicals <- c(
+  "alpha-pinene","para-cymene","alpha-terpineol","cedr-9-ene",
+  "alpha-cedrene","beta-cedrene","cis-thujopsene","alpha-himachalene",
+  "beta-chamigrene","cuparene","compound 1","alpha-chamigrene",
+  "widdrol","cedrol","beta-acorenol","alpha-acorenol",
+  "gamma-eudesmol","beta-eudesmol","alpha-eudesmol",
+  "cedr-8-en-13-ol","cedr-8-en-15-ol","compound 2","thujopsenal"
+)
+#Still some issue, but this should deal with that.
+joil <- joil |>
+  janitor::clean_names()
+
+names(joil)[11:33] <- chemicals
+#Alright, let's tidy it more.
+tidyjoil <- joil |>
+  pivot_longer(
+    cols = all_of(chemicals),
+    names_to = "compound",
+    values_to = "concentration"
+  )
+tidyjoil <- tidyjoil |>
+  filter(!is.na(concentration))
+tidyjoil <- tidyjoil |>
+  mutate(
+    sample_id = as.factor(sample_id),
+    compound  = as.factor(compound)
+  )
+#yay
+```
+##Task 4
+ Make me a graph of the following:
+  x = YearsSinceBurn
+  y = Concentration
+  facet = ChemicalID (use free y-axis scales)
+```{r}
+#Oh boy, ggplot, my favorite.
+#Can't get enough of this guy after making Withered Foxy
+#anyway.
+#chaning coils, because, fun.
+ggplot(tidyjoil, aes(x = years_since_burn, y = concentration)) +
+  geom_smooth(color = "forestgreen", fill = "grey50", size = 1) +
+  facet_wrap(~ compound, scales = "free_y", ncol = 5) +
+  labs(
+    x = "YearsSinceBurn",
+    y = "Concentration"
+  ) +
+  theme_minimal() +
+  theme(
+    strip.text = element_text(size = 10),
+    axis.text = element_text(size = 8)
+  )
+```
+##Task 5
+Use a generalized linear model to find which chemicals show concentrations that are significantly (significant, as in P < 0.05) affected by “Years Since Burn”.
+```{r}
+#Gonna be so real for this one.
+#I didn't really udnerstand, so this one is HEAVILY helped by ChatGPT. 
+#The others i mainly just ran my code by it.
+#This one was like, taught to me by it.
+modjoil <-lm(concentration ~ compound * years_since_burn, data = tidyjoil)
+
+glimpse(modjoil)
+#ooh, actually, I hate that for this one.
+#head(modjoil)
+#That's nasty too. So nasty that I commented the line.
+#Back to asking for help.
+#and tidying it again.
+modjoil <- tidy(modjoil)
+modjoil
+#okay, this is looking more like what we want.
+#Let's do more filtering, to the bits we care about only.
+modjoil<- modjoil |>
+  dplyr::filter(p.value < 0.05)
+modjoil
+```
+And I think that's what you wanted from it. Let's hope it is, because I'm tired, and this is the best we're getting. 
