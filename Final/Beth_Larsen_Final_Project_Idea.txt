@@ -1,0 +1,8 @@
+I plan to learn phytools in R as my project.
+I want to get really knowledgeable with it, and hope to be able to use it seamlessly.
+I'm in a lab and I'm supposed to use phytools, so I think this will be a good way for me to deep dive into it. 
+I'll be using some datasets that Dr. Hjelmen gave me, as well as simulating some as needs be.
+I'm also using the book Phylogenetic Comparative Methods in R by Liam J. Revell and Luke J. Harmon to help me learn.
+The data given by Dr. Hjelmen is various information about drosophlia, I'll be making trees out of it most likely. 
+It remains to be seen what else the data will be, but that's my plan. I plan to go through the whole book and do every assignment/page along with it, and come back with knowledge and use the dataset to make something by the end.
+I've included the toy tree that the book instructed me to create as my example plot.

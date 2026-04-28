@@ -1,0 +1,413 @@
+---
+title: "LARSEN_Data_Analysis_Final"
+output: html_document
+date: "2026-04-28"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+####Final Project:####
+
+For my final project I decided to learn a new R-Package, since that was one of the suggested options on the Canvas page. I'm in a lab with Dr. Carl Hjelmen here at UVU working on genome size estimations with Mayflies and Dragonflies.
+
+As a major part of this lab work, I will be using the package "Phytools" and its dependencies. I decided that this project would be the perfect way to get more familiar with that package. I used the book, "Phylogenetic Comparative Methods in R" by Liam J. Revell and Luke J. Harmon (the creators of this package) in order to learn. 
+
+My original plan was to go chapter by chapter and do every exercise in the book. Unfortunately my life got rather messy this semester including a go-kart crash that resulted in a concussion and a regular car crash that caused a mild resurgence of that concussion. Averaged out, I did roughly 10 minutes of work on this project a day from the 10th of February until the 27th of April. Some days I did more, some days I was unable to do any. I was able to go through the first four chapters of the book and get the main content done. I decided to skip most of the practice questions at the end of the chapter in favor of getting further. 
+
+I will be going over the book further this summer, and plan to return to those practice questions. 
+
+Here I will provide a brief summary of each chapter's contents, as well as one or two figures generated in each chapter. After going over each chapter's contents, I will run similar analysis on my real world data set about drosophila genome sizes.
+
+All work is done from the current working directory that contains all my files needed. I am working in Data_Course_LARSEN/Final for my case. You can move the files where you wish, as long as you work from that directory.
+
+```{r}
+library(phytools)
+library(geiger)
+library(nlme)
+library(phangorn)
+
+#In previous projects I have made variable lists at the beginning with what they mean.
+#Here I will not be doing this, as there's far too many to reasonably list here.
+```
+
+####Chapter 1####
+
+Chapter 1 of the book offered an introduction to phylogenies and how to create and load them into R for analysis. We first practiced by generating a toy tree of vertebrates and then learning to attach numbers to each node. It also went over how to directly read in a tree to our environment using the read.tree function. I've had a very rough semester, so forgive me if we went over this in class and I have forgotten it. Much of February is a blur and I do not remember many events.
+
+After learning to read in/generate a tree, I was walked through how one might cut and trim a phylogeny so that it matches with your .csv or other data file. This will be especially helpful for my current lab work since I will be working with real data that isn't always clean. I will be using this technique on the drosophila data later.
+
+We also worked briefly with a very simple PCA overview that will become more expanded upon in later chapters.
+
+For Chapter 1 I have chosen to provide the initial vertebrate toy tree we made, a fan style tree with the clade we wanted to prune highlighted, and the practice question 1's result (since this is the only practice problem I ended up doing)
+```{r}
+#Here is our Toy Tree of Vertebrates
+text.string <- "(((((Robin,Iguana),((((Cow,Whale), Pig),Bat),(Lemur, Human))),
+Colecanth), Goldfish), Shark);"
+vert.tree<-read.tree(text=text.string)
+plot(vert.tree, no.margin = TRUE)
+
+
+##Here is the fan-style phylogeny
+anolis.tree<-read.tree(file="Anolis.tre")
+#We're going to learn how to use grep to help us subset and trim the tree
+pr.species<-c("cooki", "poncensis", "gundlachi","pulchellus","stratulus","krugi","evermanni"
+              , "occultus","cuvieri","cristatellus")
+nodes<-sapply(pr.species, grep, x=anolis.tree$tip.label)
+nodes
+#sapply made it so I didn't need to write a loop for this
+#ie, what we did here was: "apply to the elements of pr.species the function grep with the argument x of grep set to anolis.tree$tip.label"
+plotTree(anolis.tree, type="fan", fsize=0.6, lwd=1, ftype="i")
+add.arrow(anolis.tree, tip = nodes, arrl=0.15, col="red", offset=2)
+
+anolis.noPR<-drop.tip(anolis.tree, pr.species)
+plotTree(anolis.noPR, type="fan", fsize=0.6, lwd=1, ftype="i")
+#Now we're extracting a clade, rather than dropping it.
+
+node<-getMRCA(anolis.tree, pr.species[-which(pr.species%in%c("cuvieri","occultus"))])
+node
+#we're getting fancy with it now
+plot(paintSubTree(anolis.tree, node, "b","a"), type="fan", fsize=0.6, lwd=2, 
+     colors=setNames(c("gray","blue"), c("a","b")), ftype="i")
+
+##And here is the practice problem's result:
+pheldat<-read.csv("phel.csv", row.names = 1, header = TRUE, stringsAsFactors = TRUE)
+pheltree<-read.tree(file="phel.phy")
+name.check(pheltree, pheldat)
+chk2<-name.check(pheltree, pheldat)
+length(intersect(pheltree$tip.label, rownames(pheldat)))
+pheltreeprun <- drop.tip(pheltree, chk2$tree_not_data)
+plotTree(pheltreeprun, ftype="i", cex=1.1)
+```
+
+####Chapter 2 ####
+
+This was the chapter where I realized that I had very possibly made a mistake and probably should not be doing this project without taking another stat's class first. I read Felsenstein in my Principles of Evolution class this semester and I do not like the man's style. He explains math in a way that is quite confusing to me. It is no coincidence that this chapter is where I struggled the most in terms of understanding.
+
+After creating a chart which I have no real comprehension of (which I will nonetheless provide here) we go over some linear models in R. We ended up using some of these in class, which I believe did help me somewhat to understand them further. 
+
+I don't recall us in class discussing OLS model though. We went over this model and how to use it in specific circumstances. OLS stands for Ordinary Least Squares. You don't get a whole lot by just outputting the OLS, you generally have to put it on top of other data.
+
+We used a seed to generate a tree that helped demonstrate that this type of model is quite easy to fall into a type I error with. I will skip most of this chapter as a result in my report, and only include the nasty chart I didn't understand, and the type I error example (and how we corrected it)
+```{r}
+###Here's the real funky plot from the beginning of the chapter I didn't really understand
+tree<-read.tree(text="((A,B,C,D,E,F,G,H,I,J,K,L,M),(N,O,P,Q,R,S,T,U,V,W,X,Y,Z));")
+##Set branch lengths on the tree
+tree<-compute.brlen(tree, power=1.8)
+##simmulate data, idependently for x and y 
+x<-fastBM(tree)
+y<-fastBM(tree) 
+## Plot the results iwth clades A and B labled.
+##split the plotting area
+par(mfrow=c(1,2))
+#graphing the tree
+plotTree(tree, type="cladogram", ftype="off", mar=c(5.1,4.1,3.1,2.1), color="darkgray",
+         xlim=c(0,1.3), ylim=c(1,Ntip(tree)))
+##add pointsa t the tips of the tree to match those on our scatterplot.
+points(rep(1,13), 1:13, pch=21, bg="lightgray", cex=1.2)
+points(rep(1,13), 14:26, pch=22, bg="black", cex=1.2)
+##add clade labels to the treec
+cladelabels(tree, "A", node=28, offset=2)
+cladelabels(tree, "B", node=29, offset=2)
+mtext("(a)", line=1, adj=0, cex=1.5)
+##mking the scatter plot of the x and y
+par(mar=c(5.1,4.1,3.1,2.1))
+plot(x,y,bty="n",las=1)
+points(x[1:13],y[1:13],pch=21, bg="lightgray", cex=1.2)
+points(x[14:26],y[14:26],pch=22, bg="black", cex=1.2)
+mtext("(b)", line=1, adj=0, cex=1.5)
+
+###Here's the example we used to generate and then correct type 1 error
+set.seed(1001)
+
+##making a complicated tree from the book
+##set starting tree to NULL
+tree<-NULL
+##repeat simulation until non-NULL (ie, non extinct) tree is obatined.
+while(is.null(tree))
+  tree<-pbtree(n=100,b=1,d=0.8,extant.only=TRUE)
+##plot the simulated tree
+plotTree(tree,fytpe="off",color="darkgray",lwd=1)
+
+#simulating evolution on the tree.
+x<-fastBM(tree)
+y<-fastBM(tree)
+par(mar=c(5.1,4.1,1.1,1.1))
+plot(x,y,cex=1.2,pch=21,bg="gray",las=1,cex.axis=0.7, cex.lab=0.9,bty="n")
+grid()
+clip(min(x),max(x),min(y),max(y))
+fit.ols<-lm(y~x)
+abline(fit.ols,lwd=2,col="darkgray")
+fit.ols
+summary(fit.ols)
+#This example shows that it's not difficult at all for the phylogeny to generate a Type I Error
+#Now we're going to try to resolve the Type I Error
+##Compute PICs for x and y
+ix<-pic(x,tree)
+iy<-pic(y,tree)
+##Fit PIC regression through the origin
+fit.pic<-lm(iy~ix+0)
+fit.pic
+##setting plotting margins
+par(mar=c(5.1,4.1,1.1,1.1))
+##graphing it
+plot(ix,iy,cex=1.2,pch=21,bg="gray",las=1,xlab="PICs for x", ylab="PICs for y",
+     cex.axis=0.7,cex.lab=0.9,bty="n")
+grid()
+clip(min(ix),max(ix),min(iy),max(iy))
+abline(fit.pic,lwd=2,col="darkgray")
+summary(fit.pic)
+#Now the statistical significance has disappeared
+```
+
+####Chapter 3####
+
+Chapter 3 was also about linear models. This time we were introduced to the PGLS. This one stands for Phylogenetic Generalized Least Squares, and also doesn't sound like the Swedish word for beer (öl), which is kind of less fun. Even if I didn't fully understand how OLS worked.
+
+I learned how to convert a tree to a correlation structure using functions from ape. After learning to do this, we compared PICS and PGLS. I'm uncertain as to what exactly a PIC is, but it was used a lot. I think this is just me forgetting. The chapter also gives a preview of Pagal's Lambda which we use more in Chapter 4. We finish the chapter off with learning how to apply these models to an ANOVA table, or more specifically an ANCOVA one. 
+
+I will provide the data extraction and the comparison between PGLS and PICs for this chapter, as well as the ACNOVA section and the plot we made at the end to illustrate these differences. Data for this chapter was related to primate eyes.
+```{r}
+###Getting the data from the trees
+primate.data<-read.csv("primateEyes.csv", row.names = 1, stringsAsFactors = TRUE)
+primate.tree<-read.tree("primateEyes.phy")
+orbit.area<-setNames(primate.data[,"Orbit_area"], rownames(primate.data))
+skull.length<-setNames(primate.data[,"Skull_length"], rownames(primate.data))
+##Now we're computing PICs on the log-transformed values of both traits
+pic.orbit.area<-pic(log(orbit.area),primate.tree)
+pic.skull.length<-pic(log(skull.length), primate.tree)
+##Fitting a linear regrression to the orbit as a function of skull.
+pic.primate<-lm(pic.orbit.area~pic.skull.length+0)
+summary(pic.primate)
+## This gives us a highly significant slope.
+
+###Comparing the PICS and PGLS
+#Converting our tree to a correlation structure so we can use the GLS on it
+#apparently we're using the ape function "corBrownian"
+spp<-rownames(primate.data)
+corBM<-corBrownian(phy=primate.tree, form=~spp)
+corBM
+#the spp thing was to specify the order of the taxa in our data.
+pgls.primate<-gls(log(Orbit_area)~log(Skull_length), data=primate.data, correlation=corBM)
+#it doesn't seem that differnt from what we were doing last chapter.
+#the correlation variable is set to the corBM which we made earlier.
+#It's our corStruct object we made.
+summary(pgls.primate)
+
+#Comparing PICs and PGLS
+coef(pic.primate)
+coef(pgls.primate)
+abs(coef(pic.primate)[1]-coef(pgls.primate)[2])
+#Because our absolute value returned is very very small, we can conclude that the 
+#methods have returned the same estimated model slopes
+#We can also compare our p-values directly
+summary(pic.primate)$coefficients[1,4]
+summary(pgls.primate)$tTable[2,4]
+#To at least 7 digits of precision, our models match perfectly
+
+###The ACNOVA table
+primate.ancova<-gls(log(Orbit_area)~log(Skull_length)+ Activity_pattern, data=primate.data,
+                    correlation = corBM)
+anova(primate.ancova)
+
+###And finally the plot we made at the end to see this pattern.
+par(mfrow=c(1,1),mar=c(5.1,5.1,2.1,2.1))
+##setting the point colors for the different levels of our factor
+pt.cols<-setNames(c("#87CEEB","#FAC358","black"),levels(primate.data$Activity_pattern))
+plot(Orbit_area~Skull_length, data=primate.data,pch=21,
+     bg=pt.cols[primate.data$Activity_pattern],log="xy",bty="n",
+     xlab="skull length (cm)", ylab=expression(paste("orbit area (",mm^2,")")),
+     cex=1.2,cex.axis=0.7,cex.lab=0.8)
+##adding a legend
+legend("bottomright",names(pt.cols),pch=21,pt.cex=1.2,pt.bg=pt.cols,cex=0.8)
+##create a common set of x values to plot our different lines for each level of 
+##the factor
+xx<-seq(min(primate.data$Skull_length),max(primate.data$Skull_length),length.out=100)
+##add lines for each level of the factor
+lines(xx,exp(predict(primate.ancova, newdata=data.frame(Skull_length=xx,
+                                                        Activity_pattern=as.factor(rep("Cathemeral",100))))),
+      lwd=2,col=pt.cols["Cathemeral"])
+lines(xx,exp(predict(primate.ancova, newdata = data.frame(Skull_length=xx,
+                                                          Activity_pattern=as.factor(rep("Diurnal",100))))),
+      lwd=2,col=pt.cols["Diurnal"])
+lines(xx,exp(predict(primate.ancova, newdata = data.frame(Skull_length=xx,
+                                                          Activity_pattern=as.factor(rep("Nocturnal",100))))),
+      lwd=2,col=pt.cols["Nocturnal"])
+```
+
+####Chapter 4####
+
+In my head, I kept calling this chapter the Drunkard's Walk chapter. This is because my lab mentor explained Brownian Motion to me as a drunkard stumbling around between a wall and a train track. He's going weird directions with each step, and on one side there's a wall that stops him from going any further. On the other side there's a train track that will kill him if he falls into it. Things are evolving kinda randomly and they can either reach a point where they fix a trait or otherwise go no further, or kill themselves off.
+
+This is the chapter where we went into BM as well as other models like EB and briefly OU.It's also the chapter where I realized that I REALLY needed to have taken more stats classes before I picked up this book. I understand about a third of the math stuff here. 
+
+I learned how and why to set the Sigma^2 value and the time steps values. There was a very messy scatter plot we made, which the more I think about it, the more I think I understand. I will provide you with the code here, but it will look different to you when you run it. I noticed that it changed each time I ran the code block. Run it enough time and you'll see the correlation like me and the book did.
+
+I'm also fairly certain the book got part of itself wrong, referring to the graph as a "Left Skewed Test" when it was a Right Skewed Test. Perhaps it means something different here, but I was taught in my stat's class I have taken that the more extreme values are the ones that determine the skewness of the graph. Longer tail, that's the side it's skewed to. 
+
+We went over Bloomberg's K and Pagel's Lambda a bit more. The K value is for when the evolutionary movement is larger than expected and Lambda is for smaller values. That's what I ended up gathering from the chapter. And from the sound of it, that's all I needed to know for the sake of this chapter. It will tell me more nuance later in the book over the summer.
+
+I've provided the first BM plot the book guided me to make, the bacteria data that was used, the K and Lambda first problems, and the end comparison between all three models. (With some odd variable names because I was getting sick of dots and underscores and found using character names was easier on me.)
+```{r}
+##First BM Plot we made for the book
+##set values for the time steps and sigma squared parameter
+t<-0:100
+sig2<-0.01
+##simulate a set of random changes
+x<-rnorm(n=length(t)-1,sd=sqrt(sig2))
+##compute their cummulative sum.
+x<-c(0,cumsum(x))
+##create a plot with nice margins
+par(mar=c(5.1,4.1,2.1,2.1))
+plot(t,x,type="l",ylim=c(-2,2),bty="n",xlab="time",ylab="trait value",las=1,cex.axis=0.8)
+
+bacteria.data<-read.csv("bac_rates.csv",row.names = 1)
+head(bacteria.data)
+bacteria.tree<-read.tree("bac_rates.phy")
+print(bacteria.tree,printlen=2)
+plotTree(bacteria.tree, ftype="i",fsize=0.5,ldw=1,mar=c(2.1,2.1,0.1,1.1))
+axis(1,at=seq(0,1,length.out=5),cex.axis=0.8)
+library(geiger)
+name.check(bacteria.tree,bacteria.data)
+genome_size<-bacteria.data[,"Genome_Size_Mb"]
+genome_size
+#oopsies, now our vector doesn't have names, just the numbers.
+#Let's fix that.
+names(genome_size)<-rownames(bacteria.data)
+head(genome_size)
+#Now we can fit the BM to our data.
+
+#We're using Geiger's function of fitContinuous, which uses GM as the default
+fitBM_gs<-fitContinuous(bacteria.tree,genome_size)
+fitBM_gs
+mutation<-setNames(bacteria.data[,"Accumulation_Rate"],rownames(bacteria.data))
+head(mutation)
+ln_mutation<-log(mutation)
+fitBM_ar<-fitContinuous(bacteria.tree,ln_mutation)
+fitBM_ar
+
+###K value, which this function defaults to
+phylosig(bacteria.tree, genome_size)
+K_gs<-phylosig(bacteria.tree,genome_size, test=TRUE, nsim=10000)
+K_gs
+K_ar<-phylosig(bacteria.tree,ln_mutation,test=TRUE,nsim=10000)
+K_ar
+
+###And now for Lambda (Which we do have to specify)
+phylosig(bacteria.tree,genome_size,method="lambda")
+phylosig(bacteria.tree,ln_mutation,method="lambda")
+lambda_gs<-phylosig(bacteria.tree,genome_size,method="lambda",test=TRUE)
+lambda_gs
+lambda_ar<-phylosig(bacteria.tree,ln_mutation,method="lambda",test=TRUE)
+lambda_ar
+
+###fit EB model to genome size
+#Back to the awful variabe names
+#Alright, I'm sick of _ and . and wahtever.
+#The fitEB_gs from the book is now Barda
+Barda<-fitContinuous(bacteria.tree,genome_size,model="EB")
+Barda
+#So, the book is saying that I should've gotten an error, but I didn't.
+#Maybe that was fixed in an update to R Studio.
+#I'm getting the same vablues otherwise
+#like a being really relaly close to zero.
+
+#fitOU_gs is going to be called Lief
+Lief<-fitContinuous(bacteria.tree,genome_size,model="OU")
+#This time I did get the error message, interesting.
+Lief
+#Apparently this error this time indicates that our Lief thing is at the upper bounds of
+#the default optimization
+#So we change them.
+Lief<-fitContinuous(bacteria.tree,genome_size,model="OU",bounds=list(alpha=c(0,10)))
+Lief
+#Ther's no warning now, and both are optimized alpha value and our log liklihood are higher
+#I think that makes sense, but I'm not sure. 
+#I think it's unfare of the book to just throw that towards us
+#when we haven't talked about OU yet
+#I don't know what this means yet
+
+#COmpare the EB and OU, and BM, we can just use an information criterion like the AIC
+##accumulate AIC scores from our three models into a vector
+#Gonna call this one Jasmine
+Jasmine<-setNames(c(AIC(fitBM_gs),AIC(Barda),AIC(Lief)),c("BM","EB","OU"))
+Jasmine
+#Here we want the LOWEST AIC score.
+#In this case, that's OU, or Lief.
+```
+For the sake of this class and letting myself do this write up, I ran out of time. I spent a good 10 hours on this broken up over the semester, so I do not feel like I wasted my time. I'll be pushing the full practice script with this R Markdown, so you can see that I actually did work there too and didn't just pick and choose randomly from the book.
+
+####Drosophila Data Set####
+
+Now I am going to attempt to apply what I have learned to my drosophilia data set that Dr. Hjelmen gave to me. Get ready for me to make a fool of myself and you can go laugh at me with him. 
+
+I will be making a phylogeny plot, getting the BM, EB, and OU models up for genome size, and then comparing the three models. I will be skipping most of chapters 2 and 3 because I don't know how to interpret them, so I feel unable to properly tun their code. However, I am still glad I went through them because I feel they have helped me understand more in general. 
+
+I guess let's start by loading in the information.
+```{r}
+alldat<-read.csv("alldata.csv")
+mtree<-read.tree("male.tree.tre")
+ftree<-read.tree("female.tree.tre")
+ddtree<-read.nexus("dateddrostree.nex")
+```
+Now that we have these files loaded in, let's make our tree, we're just doing one here for sake of time. I have a court case later today for that car crash mentioned and I need to get this done now so I can submit it on time.
+
+We're using the female tree because I can't get the ddtree to work. Sorry.
+```{r}
+rownames(alldat) <- alldat$Species
+fchk<-name.check(ftree, alldat)
+head(alldat)
+length(fchk$tree_not_data)
+Ntip(ftree)
+
+head(ftree$tip.label)
+head(alldat$Species)
+length(fchk$tree_not_data)
+length(fchk$data_not_tree)
+
+#name.check(ftree, alldat)
+#length(intersect(alldat$Species, rownames(alldat)))
+drostree <- drop.tip(ftree, fchk$tree_not_data)
+plotTree(drostree,ftype="off", cex=0.3,lwd=1)
+
+```
+I've elected to remove the tip labels from this tree in order to make it somewhat legible. I did this on purpose. That was a problem I had to solve on my own, the book did not guide me there. 
+
+Now let's get the BM, EB, and OU for the genome size. I will again be using the female tree.
+```{r}
+#genome - our genome size subset of alldat
+#Brown - our brownian motion for genomsize
+#Early - our early bust for genome size
+#Ough - Our OU that I'm totally forgetting what it stands for. 
+
+genome<-alldat[drostree$tip.label,"MbDNA_Female"]
+genome
+names(genome)<-drostree$tip.label
+
+brown<-fitContinuous(drostree, genome)
+brown
+#early<-fitContinuous(drostree, genome, model="EB",bounds=list(a=c(-10, -1e-6)))
+#early
+#So it turns out that the EB is not going to work for me.The data doens't support it and I can't figure out how to force it.
+#SO I'll just compare brown and ough together.
+ough<-fitContinuous(drostree, genome,model="OU")
+ough
+
+compare<-setNames(c(AIC(brown),AIC(ough)),c("BM","OU"))
+compare
+```
+Here we see that the BM has the lower number, which means that Brownian Motion is a better model for what our data shows when it comes to genome size evolution.
+
+####Final Words####
+I'll be fully honest, I kind of regret choosing this project. I should've just done something simpler. But you saw my Withered Foxy gif, simple doesn't always vibe with me.
+
+I apologize if this isn't exactly what you'd want from this assignment. This is what I've done, and this semester has been such a nightmare for me that this is all I can do. 
+
+With my drosophila data set, I think if I'm reading the tree right, the phylogeny I plotted does seem to support the conclusion of BM as the better model. It looks like the BM charts I was instructed on how to make it the books, which is kind of cool. I get to see it from a real data set, rather than a simulation.
+
+I'll be continuing to go through this book over the summer, probably at a slower pace though. I know I'm pretty new to this, but I look forward to my career as a bioinformatician. Thank you for your patience with me. 
+
+I learned a lot from this project and will hopefully learn even more from the book over the summer. I hope you have a nice summer as well. Thank you for your time.
+
+-Beth Larsen.
